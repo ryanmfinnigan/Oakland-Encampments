@@ -1,0 +1,117 @@
+---
+title: "The Growth and Shifting Spatial Distribution of Tent Encampments in Oakland, CA: Replication Sample"
+author: "Ryan Finnigan"
+date: "3/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# preamble
+setwd("/Users/ryanfinnigan/Desktop/apps/mathematica")
+library(tidyverse)
+library(rgdal)
+library(GISTools)
+library(dplyr)
+
+# loading data from 1_tidying_streetview_data.R
+load("encampment_data_public.RData")
+```
+
+## Introduction
+
+This document results from R code replicating selected results from my forthcoming article:
+
+> Ryan Finnigan. 2021. "The Growth and Shifting Spatial Distribution of Tent Encampments in Oakland, California." *The ANNALS of the American Academy of Political and Social Science*
+>
+> **Abstract**
+> Tent encampments have become an especially common form of homelessness in West Coast cities like Oakland, California, where the number of people living in tent encampments increased by 130% between 2017 and 2019. Relative to other experiences of homelessness, tent encampments provide residents both potential benefits and risks that depend on their location, size, and stability. Using novel data from Google Street Views, I empirically document the growth and spatial dynamics of tent encampments in Oakland over the last decade. The number and size of tent encampments rapidly increased between 2014 and 2019, with substantial variation in their stability. City interventions, notably including the city’s outdoor transitional housing sites, displaced several large tent encampments. In combination with the continued upward trend in tent encampments overall, these displacements increased the dispersion of tent encampments throughout nearby neighborhoods.
+
+As described in the article, I manually coded images from Google Maps' Street Views to record the number, size, and locations of tent encampments in West and central Oakland. At the time of data collection, Google Maps included images from 2008 to 2019. I coded the data using Excel spreadsheets for each census tract in the study area.
+
+The GitHub repository for this sample replication includes:
+
+1. `1_tidying_streetview_data.R` : R code for importing and formatting the data
+
+2. `2_analyzing_streetview_data.Rmd` : the R Markdown file producing this document, including the data summaries and visualizations
+
+3. `encampment_data_public.Rdata` : the data produced by the file 1_tidying_streetview_data.R
+
+This document includes versions of Figure 1, Figure 3, and Figure B1 from the published article. Relative to the data for the published article, these data do not include street addresses, latitude, or longitude for specific encampments. These data can still document tract-level aggregate data, but cannot spatially identify specific encampments. 
+
+To produce this document, run the R Markdown file `2_analyzing_streetview_data.Rmd`, which loads the data, `encampment_data_public.Rdata`, and contains the analysis code. The file `1_tidying_streetview_data.R` is only included in the GitHub to demonstrate how the data were processed.
+
+
+## Data Summary
+
+As described in the published article, I coded Google Street View images to measure the number, size, and location of tent encampments in Oakland between 2009 and 2019. Google has repeatedly sent vehicles with 360- degree cameras to photograph public streets. These images are viewable through Google Maps,including the history of images taken in each location dated with month and year. I manually viewed and coded these images to identify tent encampments over time.
+
+In these data, a "tent" included any actual tent or make-shift structure that could serve as a person's shelter. I defined an encampment as any collection of nearby tents, including just a single tent. I generally defined “nearby” as collections of tents separated by less than a couple hundred feet. For example, tents across the street from each other or on either end of the same block face would be coded as the same encampment. I included recreational vehicles (RVs) in encampments when also in the presence of tents. Online Appendix A of the published article describes my coding rules for tents, RVs, and encampments in greater detail, including visual examples.
+
+The full data include `r dim(raw.data)[1]` observations of `r length(unique(raw.data$id))` encampment locations. Of these observations, `r dim(filter(raw.data, tents>0))[1]` included observable tents.
+
+Documenting trends in tent encampments required some adjustment for Street Views’ irregular or staggered timing between locations. I created a harmonized set of 14 time periods based on the overall distribution of Street Views by month and year. I adjusted for missing observations by linearly interpolating the numbers of tents and RVs using preceding and subsequent observations. These adjusted data include `r dim(filter(imp.data, !is.na(tentsi)))[1]` observations of `r length(unique(imp.data$id))` areas across the 14 time periods.
+
+## Trends in the Raw Data
+
+Figure 1 presents all `r dim(filter(raw.data, tents>0))[1]` observations with observed tents. Each point is an observed tent encampment. The time of the encampment's observation is on the x-axis and its size (number of tents and RVs) is on the y-axis. The number of encampments clearly increased over time, shown by the greater number of points from left to right. Encampment size also increased over time, shown by the greater heights of the points from left to right.
+
+```{r raw_plot}
+# scatterplot of the number of tents+RVs in each observed encampment
+# only observations with tents included
+# uses raw data with all observations
+tentscatter <- raw.data %>%
+  dplyr::select(tents, rv, time) %>% 
+  filter(tents>0) %>% 
+  mutate(tentrv = tents+rv)
+plot(tentrv~time, data = tentscatter, main = "Figure 1. Number of tents and RVs counted in each \n observed encampment by time in Google Street Views",
+     xlab = "Year",
+     ylab = "Number of Tents + RVs")
+```
+
+## Trends in Total Number of Encampments and Tents/RVs
+
+Figure 2 presents the trend in the total number of encampments observed in the study area using the harmonized time periods and interpolated data. There was only one encampment with a single tent in 2008. The number of tent encampments increased substantially after late 2011, peaking at `r dim(filter(imp.data, time.period==2019.2 & tentrvi>0))[1]` encampments in early 2019.
+
+```{r encampment_trend}
+# total number of encampments per time period
+# uses harmonized time periods with interpolated values
+camp.trend <- imp.data %>% 
+  group_by(time.period) %>% 
+  summarize(num.camps = sum(tentrvi>=1, na.rm = TRUE))
+plot(num.camps ~ time.period, data = camp.trend, type = "b", 
+     main = "Figure 2. Trend in the number of encampments counted in West \n and Central Oakland using Google Street View images.",
+     xlab = "Year",
+     ylab = "Number of Encampments")
+```
+
+The total number of tents and RVs counted also increased starkly over time, shown in Figure 3. The growth of tents and RVs began after 2011 and accelerated in 2015. I counted `r imp.data %>% ungroup() %>% filter(time.period==2019.2 & !is.na(tentrvi)) %>% dplyr::select(tentrvi) %>% sum()` tents and RVs in tent encampments in West in Central Oakland in 2019.
+
+```{r tent_trend}
+# total number of tents+RVs per time period
+# uses harmonized time periods with interpolated values
+tent.trend <- imp.data %>% 
+  group_by(time.period) %>% 
+  summarize(num.tents = sum(tentrvi, na.rm = TRUE))
+plot(num.tents ~ time.period, data = tent.trend, type = "b", 
+     main = "Figure 3. Trend in the total number of tents and RVs counted in West \n and Central Oakland using Google Street View images.",
+     xlab = "Year",
+     ylab = "Number of Tents + RVs")
+```
+
+## Spatial Distribution of Tent Encampments
+
+Figure 4 is a choropleth map for the number of tents and RVs in encampments by census tract in early 2019. Darker shades represent more tents and RVs in the tract. The map has major highways overlaid with thick black lines (I-80, I- 580, I-880, and I-980). As described in the published article, the spatial distribution of tent encampments is correlated with many features of urban space. Tent encampments are more common in highway underpasses and sparsely populated industrial or commercial areas. Encampments are also more common in neighborhoods exhibiting common signs of gentrification--increasing median rents, rising median incomes and education, increasing fractions of white residents and decreasing fractions of residents of color--but these patterns are complex. 
+
+```{r map}
+
+# defining color categories
+shades = shading(c(10, 20, 30, 40, 50, 75, 100), cols = brewer.pal(8, "Blues"))
+
+# making map for 2019
+choropleth(oak.tracts, oak.tracts$tents2019, shading = shades)
+plot(oak.highways, col = "grey0", lwd = 5, add = T)
+title(main = "Figure 4. Choropleth map of tents and RVs in \n West and Central Oakland")
+choro.legend(-122.3575, 37.827, shades, title = "Number of Tents+RVs")
+```
